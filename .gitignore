@@ -1,0 +1,14 @@
+**/target/
+**/node_modules/
+frontend/dist/
+frontend/*.tsbuildinfo
+.tools/
+.runtime/
+.env
+.env.*
+!.env.example
+*.log
+.idea/
+.vscode/
+*.iml
+.DS_Store

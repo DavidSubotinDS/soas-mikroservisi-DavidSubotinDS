@@ -1,0 +1,162 @@
+name: soas-exchange
+
+x-environment: &environment
+  EUREKA_URL: http://naming-server:8761/eureka/
+  INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-soas-local-internal-change-me}
+  GATEWAY_SERVICE_KEY: ${GATEWAY_SERVICE_KEY:-soas-local-gateway-change-me}
+  FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:5173}
+  SOAS_DEMO_DATA: ${SOAS_DEMO_DATA:-true}
+
+services:
+  naming-server:
+    image: ${DOCKERHUB_USERNAME:-soas-local}/soas-naming-server:latest
+    build:
+      context: .
+      dockerfile: naming-server/Dockerfile
+    environment:
+      <<: *environment
+    ports:
+      - "8761:8761"
+    restart: unless-stopped
+
+  users-service:
+    image: ${DOCKERHUB_USERNAME:-soas-local}/soas-users-service:latest
+    build:
+      context: .
+      dockerfile: users-service/Dockerfile
+    environment:
+      <<: *environment
+    depends_on:
+      naming-server:
+        condition: service_healthy
+    restart: unless-stopped
+
+  currency-exchange:
+    image: ${DOCKERHUB_USERNAME:-soas-local}/soas-currency-exchange:latest
+    build:
+      context: .
+      dockerfile: currency-exchange/Dockerfile
+    environment:
+      <<: *environment
+      FIAT_API_URL: ${FIAT_API_URL:-https://api.frankfurter.dev}
+    depends_on:
+      naming-server:
+        condition: service_healthy
+    restart: unless-stopped
+
+  currency-conversion:
+    image: ${DOCKERHUB_USERNAME:-soas-local}/soas-currency-conversion:latest
+    build:
+      context: .
+      dockerfile: currency-conversion/Dockerfile
+    environment:
+      <<: *environment
+    depends_on:
+      naming-server:
+        condition: service_healthy
+      bank-account:
+        condition: service_healthy
+      currency-exchange:
+        condition: service_healthy
+    restart: unless-stopped
+
+  bank-account:
+    image: ${DOCKERHUB_USERNAME:-soas-local}/soas-bank-account:latest
+    build:
+      context: .
+      dockerfile: bank-account/Dockerfile
+    environment:
+      <<: *environment
+    depends_on:
+      naming-server:
+        condition: service_healthy
+      users-service:
+        condition: service_healthy
+    restart: unless-stopped
+
+  crypto-wallet:
+    image: ${DOCKERHUB_USERNAME:-soas-local}/soas-crypto-wallet:latest
+    build:
+      context: .
+      dockerfile: crypto-wallet/Dockerfile
+    environment:
+      <<: *environment
+    depends_on:
+      naming-server:
+        condition: service_healthy
+      users-service:
+        condition: service_healthy
+    restart: unless-stopped
+
+  crypto-exchange:
+    image: ${DOCKERHUB_USERNAME:-soas-local}/soas-crypto-exchange:latest
+    build:
+      context: .
+      dockerfile: crypto-exchange/Dockerfile
+    environment:
+      <<: *environment
+      CRYPTO_API_URL: ${CRYPTO_API_URL:-https://api.coinbase.com}
+    depends_on:
+      naming-server:
+        condition: service_healthy
+    restart: unless-stopped
+
+  trade-service:
+    image: ${DOCKERHUB_USERNAME:-soas-local}/soas-trade-service:latest
+    build:
+      context: .
+      dockerfile: trade-service/Dockerfile
+    environment:
+      <<: *environment
+    depends_on:
+      naming-server:
+        condition: service_healthy
+      bank-account:
+        condition: service_healthy
+      crypto-wallet:
+        condition: service_healthy
+      crypto-exchange:
+        condition: service_healthy
+      currency-conversion:
+        condition: service_healthy
+    restart: unless-stopped
+
+  api-gateway:
+    image: ${DOCKERHUB_USERNAME:-soas-local}/soas-api-gateway:latest
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
+    environment:
+      <<: *environment
+    ports:
+      - "8765:8765"
+    depends_on:
+      users-service:
+        condition: service_healthy
+      bank-account:
+        condition: service_healthy
+      crypto-wallet:
+        condition: service_healthy
+      currency-exchange:
+        condition: service_healthy
+      crypto-exchange:
+        condition: service_healthy
+      currency-conversion:
+        condition: service_healthy
+      trade-service:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    image: ${DOCKERHUB_USERNAME:-soas-local}/soas-frontend:latest
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8765}
+    ports:
+      - "5173:80"
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    restart: unless-stopped
+

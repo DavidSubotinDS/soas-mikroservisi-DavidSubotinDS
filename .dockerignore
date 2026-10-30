@@ -1,0 +1,9 @@
+.git
+.tools
+.runtime
+**/target
+**/node_modules
+**/dist
+.env
+.env.*
+*.log
