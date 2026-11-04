@@ -11,6 +11,11 @@ class ExchangeTest {
   RateProvider provider = mock(RateProvider.class);
   ExchangeService exchange = new ExchangeService(provider);
 
+  @BeforeEach
+  void catalog() {
+    when(provider.currencies()).thenReturn(java.util.List.of("EUR", "RSD", "USD", "NZD"));
+  }
+
   @Test
   void successfulNormalizedLookup() {
     when(provider.rate("EUR", "RSD")).thenReturn(new BigDecimal("117.5"));
@@ -18,9 +23,9 @@ class ExchangeTest {
   }
 
   @Test
-  void equalCurrencyIsOneWithoutProvider() {
+  void equalCurrencyIsOneWithoutRateLookup() {
     assertThat(exchange.rate("EUR", "EUR").rate()).isEqualByComparingTo("1");
-    verifyNoInteractions(provider);
+    verify(provider, never()).rate(anyString(), anyString());
   }
 
   @Test
@@ -40,5 +45,27 @@ class ExchangeTest {
   void invalidProviderRateIsRejected() {
     when(provider.rate(anyString(), anyString())).thenReturn(BigDecimal.ZERO);
     assertThatThrownBy(() -> exchange.rate("EUR", "RSD")).isInstanceOf(BusinessException.class);
+  }
+
+  @Test
+  void providerCurrencyOutsideOriginalAllowlistIsSupportedAndCatalogIsCached() {
+    when(provider.rate("EUR", "NZD")).thenReturn(new BigDecimal("1.99"));
+    assertThat(exchange.rate("EUR", "nzd").rate()).isEqualByComparingTo("1.99");
+    assertThat(exchange.currencies()).contains("NZD");
+    verify(provider, times(1)).currencies();
+  }
+
+  @Test
+  void unsupportedThreeLetterCodeCannotBypassProviderCatalog() {
+    assertThatThrownBy(() -> exchange.rate("ZZZ", "EUR"))
+        .hasMessageContaining("Unsupported fiat currency");
+    verify(provider, never()).rate(anyString(), anyString());
+  }
+
+  @Test
+  void missingCatalogIsUnavailableRatherThanFallingBackToFixedCurrencies() {
+    when(provider.currencies()).thenReturn(java.util.List.of());
+    assertThatThrownBy(() -> exchange.rate("EUR", "EUR"))
+        .hasMessageContaining("catalog is unavailable");
   }
 }

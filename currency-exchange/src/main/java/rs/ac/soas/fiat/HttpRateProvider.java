@@ -3,7 +3,9 @@ package rs.ac.soas.fiat;
 import java.math.BigDecimal;
 import java.net.http.HttpClient;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
@@ -20,6 +22,41 @@ public class HttpRateProvider implements RateProvider {
     var factory = new JdkClientHttpRequestFactory(client);
     factory.setReadTimeout(Duration.ofSeconds(5));
     http = RestClient.builder().baseUrl(baseUrl).requestFactory(factory).build();
+  }
+
+  @Override
+  public List<String> currencies() {
+    try {
+      List<Map<String, Object>> response =
+          http.get()
+              .uri("/v2/currencies")
+              .retrieve()
+              .body(new ParameterizedTypeReference<List<Map<String, Object>>>() {});
+      if (response == null)
+        throw BusinessException.unavailable("Fiat provider returned no currencies");
+      // The provider also lists crypto and precious metals. ISO numeric codes identify
+      // monetary currencies; the four ISO precious-metal codes are not fiat money.
+      var metals = Set.of("XAU", "XAG", "XPD", "XPT");
+      List<String> result =
+          response.stream()
+              .filter(row -> row.get("iso_numeric") != null)
+              .map(row -> rs.ac.soas.contract.Assets.code(String.valueOf(row.get("iso_code"))))
+              .filter(
+                  code ->
+                      code.matches("[A-Z]{3}")
+                          && !metals.contains(code)
+                          && !rs.ac.soas.contract.Assets.CRYPTO.contains(code))
+              .distinct()
+              .sorted()
+              .toList();
+      if (result.isEmpty())
+        throw BusinessException.unavailable("Fiat provider returned no currencies");
+      return result;
+    } catch (BusinessException ex) {
+      throw ex;
+    } catch (Exception ex) {
+      throw BusinessException.unavailable("Fiat currency catalog is unavailable or malformed");
+    }
   }
 
   @Override

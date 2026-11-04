@@ -19,7 +19,7 @@ class HttpRateProviderTest {
   HttpRateProvider provider(String body, int status) throws Exception {
     server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
     server.createContext(
-        "/v2/rate/EUR/RSD",
+        "/v2/",
         exchange -> {
           byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
           exchange.getResponseHeaders().set("Content-Type", "application/json");
@@ -48,5 +48,27 @@ class HttpRateProviderTest {
   void missingRateIsHandled() throws Exception {
     assertThatThrownBy(() -> provider("{}", 200).rate("EUR", "RSD"))
         .isInstanceOf(BusinessException.class);
+  }
+
+  @Test
+  void catalogIncludesFiatOutsideOriginalListAndExcludesCryptoAndMetals() throws Exception {
+    assertThat(
+            provider(
+                    """
+                    [{"iso_code":"NZD","iso_numeric":"554"},
+                     {"iso_code":"EUR","iso_numeric":"978"},
+                     {"iso_code":"ETH","iso_numeric":null},
+                     {"iso_code":"XAU","iso_numeric":"959"}]
+                    """,
+                    200)
+                .currencies())
+        .containsExactly("EUR", "NZD");
+  }
+
+  @Test
+  void malformedCatalogIsHandled() throws Exception {
+    assertThatThrownBy(() -> provider("{}", 200).currencies())
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("catalog");
   }
 }

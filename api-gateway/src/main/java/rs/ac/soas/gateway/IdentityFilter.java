@@ -7,6 +7,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
+import rs.ac.soas.contract.Api;
 
 @Component
 public class IdentityFilter implements GlobalFilter, Ordered {
@@ -27,8 +28,8 @@ public class IdentityFilter implements GlobalFilter, Ordered {
         .getPrincipal()
         .map(
             principal -> {
-              GatewayIdentity identity =
-                  ((Authentication) principal).getPrincipal() instanceof GatewayIdentity user
+              Api.Identity identity =
+                  ((Authentication) principal).getPrincipal() instanceof Api.Identity user
                       ? user
                       : null;
               return forward(exchange, identity);
@@ -37,7 +38,7 @@ public class IdentityFilter implements GlobalFilter, Ordered {
         .flatMap(chain::filter);
   }
 
-  private ServerWebExchange forward(ServerWebExchange exchange, GatewayIdentity identity) {
+  private ServerWebExchange forward(ServerWebExchange exchange, Api.Identity identity) {
     exchange.getResponse().getHeaders().setCacheControl("no-store");
     var request =
         exchange
@@ -53,7 +54,7 @@ public class IdentityFilter implements GlobalFilter, Ordered {
                   headers.set("X-Gateway-Key", key);
                   if (identity != null) {
                     headers.set("X-User-Email", identity.email());
-                    headers.set("X-User-Role", identity.role());
+                    headers.set("X-User-Role", identity.role().name());
                   }
                 })
             .build();

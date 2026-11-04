@@ -14,6 +14,7 @@ public class TradeService {
   private final FiatClient fiat;
   private final ConversionClient conversion;
   private final RateRetry retry;
+  private final FiatCurrencies currencies;
 
   public TradeService(
       BankClient bank,
@@ -21,24 +22,24 @@ public class TradeService {
       CryptoClient crypto,
       FiatClient fiat,
       ConversionClient conversion,
-      RateRetry retry) {
+      RateRetry retry,
+      FiatCurrencies currencies) {
     this.bank = bank;
     this.wallet = wallet;
     this.crypto = crypto;
     this.fiat = fiat;
     this.conversion = conversion;
     this.retry = retry;
+    this.currencies = currencies;
   }
 
   public Api.Transaction trade(
       String rawEmail, String rawFrom, String rawTo, BigDecimal rawQuantity) {
     String email = Assets.email(rawEmail), from = Assets.code(rawFrom), to = Assets.code(rawTo);
     BigDecimal quantity = Checks.positive(rawQuantity);
-    Set<String> assets = new HashSet<>(Assets.FIAT);
-    assets.addAll(Assets.CRYPTO);
-    Checks.asset(from, assets, "asset");
-    Checks.asset(to, assets, "asset");
     boolean sourceCrypto = Assets.CRYPTO.contains(from), targetCrypto = Assets.CRYPTO.contains(to);
+    if (!sourceCrypto) currencies.require(from);
+    if (!targetCrypto) currencies.require(to);
     if (!sourceCrypto && !targetCrypto)
       throw BusinessException.bad("Use currency-conversion for fiat to fiat");
     Api.Account source = sourceCrypto ? wallet.account(email) : bank.account(email);

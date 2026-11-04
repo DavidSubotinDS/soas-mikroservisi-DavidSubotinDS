@@ -19,6 +19,6 @@ public class ExchangeController {
 
   @GetMapping("/currency-exchange/assets")
   public List<String> assets() {
-    return Assets.FIAT.stream().sorted().toList();
+    return exchange.currencies();
   }
 }

@@ -29,22 +29,6 @@ export interface Transaction {
   report: string;
   operationId: string;
 }
-export const FIAT = [
-  "EUR",
-  "USD",
-  "RSD",
-  "GBP",
-  "CHF",
-  "JPY",
-  "CAD",
-  "AUD",
-  "CNY",
-  "HUF",
-  "BAM",
-  "NOK",
-  "SEK",
-  "PLN",
-];
 export const CRYPTO = ["BTC", "ETH", "SOL", "ADA", "XRP", "LTC", "DOGE", "BCH"];
 export const formatAmount = (amount: string | number, crypto = false) =>
   new Intl.NumberFormat("en-GB", {

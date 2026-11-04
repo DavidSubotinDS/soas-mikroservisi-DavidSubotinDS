@@ -57,12 +57,38 @@ export function CurrencySelect({
   return (
     <label>
       {label}
-      <select value={value} onChange={(event) => onChange(event.target.value)}>
+      <select
+        value={value}
+        disabled={!options.length}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        {!options.length && <option value="">Loading currencies…</option>}
         {options.map((code) => (
           <option key={code}>{code}</option>
         ))}
       </select>
     </label>
+  );
+}
+export function CurrencyCatalogStatus({
+  loading,
+  error,
+  reload,
+}: {
+  loading: boolean;
+  error: string;
+  reload: () => void;
+}) {
+  return (
+    <>
+      {loading && <Busy />}
+      <Notice message={error} />
+      {error && (
+        <button type="button" className="secondary" onClick={reload}>
+          Retry loading currencies
+        </button>
+      )}
+    </>
   );
 }
 export function AccountView({ account }: { account: Account }) {

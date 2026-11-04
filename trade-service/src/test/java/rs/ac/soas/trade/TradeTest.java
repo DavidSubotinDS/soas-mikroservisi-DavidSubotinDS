@@ -18,7 +18,9 @@ class TradeTest {
   CryptoClient crypto = mock(CryptoClient.class);
   FiatClient fiat = mock(FiatClient.class);
   ConversionClient conversion = mock(ConversionClient.class);
-  TradeService trade = new TradeService(bank, wallet, crypto, fiat, conversion, new RateRetry());
+  TradeService trade =
+      new TradeService(
+          bank, wallet, crypto, fiat, conversion, new RateRetry(), new FiatCurrencies(fiat));
   final String email = "user@test.local";
   Api.Account account =
       new Api.Account(
@@ -28,10 +30,12 @@ class TradeTest {
               new Api.Holding(2, "USD", new BigDecimal("1000")),
               new Api.Holding(3, "RSD", new BigDecimal("1000")),
               new Api.Holding(4, "ETH", new BigDecimal("1000")),
-              new Api.Holding(5, "BTC", new BigDecimal("1000"))));
+              new Api.Holding(5, "BTC", new BigDecimal("1000")),
+              new Api.Holding(6, "NZD", new BigDecimal("1000"))));
 
   @BeforeEach
   void setup() {
+    when(fiat.currencies()).thenReturn(List.of("EUR", "RSD", "USD", "NZD"));
     when(bank.account(email)).thenReturn(account);
     when(wallet.account(email)).thenReturn(account);
     when(crypto.rate(anyString(), anyString()))
@@ -67,7 +71,9 @@ class TradeTest {
     "RSD,BTC,60",
     "ETH,EUR,20",
     "BTC,USD,20",
-    "ETH,RSD,60"
+    "ETH,RSD,60",
+    "NZD,BTC,60",
+    "ETH,NZD,60"
   })
   void allRequiredModes(String from, String to, String expected) {
     Api.Transaction result = trade.trade(email, from, to, BigDecimal.TEN);
@@ -75,12 +81,12 @@ class TradeTest {
     assertThat(result.report()).contains(from, to);
     if (Assets.CRYPTO.contains(to)) assertThat(result.wallet()).isNotNull();
     else assertThat(result.bankAccount()).isNotNull();
-    if (from.equals("RSD")) {
+    if (from.equals("RSD") || from.equals("NZD")) {
       verify(conversion)
           .convert(
               argThat(
                   r ->
-                      r.from().equals("RSD")
+                      r.from().equals(from)
                           && r.to().equals("USD")
                           && r.quantity().compareTo(BigDecimal.TEN) == 0));
       verify(bank)
@@ -90,13 +96,13 @@ class TradeTest {
                       a.currency().equals("USD")
                           && a.delta().compareTo(new BigDecimal("-30")) == 0));
     }
-    if (to.equals("RSD"))
+    if (to.equals("RSD") || to.equals("NZD"))
       verify(conversion)
           .convert(
               argThat(
                   r ->
                       r.from().equals("USD")
-                          && r.to().equals("RSD")
+                          && r.to().equals(to)
                           && r.quantity().compareTo(new BigDecimal("20")) == 0));
   }
 
@@ -105,7 +111,8 @@ class TradeTest {
   void insufficientFunds(String from, String to) {
     assertThatThrownBy(() -> trade.trade(email, from, to, new BigDecimal("1001")))
         .hasMessageContaining("Insufficient");
-    verifyNoInteractions(crypto, fiat, conversion);
+    verifyNoInteractions(crypto, conversion);
+    verify(fiat, never()).rate(anyString(), anyString());
     verify(bank, never()).adjust(any());
     verify(wallet, never()).adjust(any());
   }

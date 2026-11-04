@@ -1,233 +1,164 @@
 # SOAS Exchange Desk
 
-University project for **Servisno orijentisana arhitektura sistema, 2025/26**. Nine Spring microservices provide user management, separate fiat and crypto holdings, public rates, fiat conversion and crypto trading. React communicates exclusively with API Gateway on **8765**.
+My project for **Servisno orijentisana arhitektura sistema (2025/26)**. It’s a demo exchange where you can look up fiat and crypto rates, convert currencies, and trade using a virtual bank account and crypto wallet.
 
-This repository was implemented locally from an empty Git repository. No university remote is configured and nothing has been pushed. The university repository must be assigned separately. The original supplied requirements are preserved in [docs/SPECIFICATION.md](docs/SPECIFICATION.md); the user's instruction to work locally overrides its initial Classroom-repository assumption.
+![Public exchange rates screen](docs/screenshots/public-rates.jpg)
 
-## Quick start
+## Run with Docker
 
-Requirements: **JDK 17**, Maven 3.9+, Node 22.12+ and npm; Docker Desktop with Linux containers for Compose. Run commands from the repository root.
-
-### Docker Compose
+With Docker Desktop running in Linux container mode, open a terminal in the repository root and run:
 
 ```powershell
-Copy-Item .env.example .env
-# Set DOCKERHUB_USERNAME in .env to your own Docker Hub username.
-docker compose config --quiet
-docker compose build
-docker compose up -d --wait --wait-timeout 240
+docker compose up -d --build --wait --wait-timeout 300
 ```
 
-Open [the frontend](http://localhost:5173), [Gateway health](http://localhost:8765/actuator/health), and [Eureka](http://localhost:8761). New containers can take 60–120 seconds to register and provision the demo USER. Business-service ports are private to the Compose network. All application databases are in memory: restarting their containers resets data.
+- [Exchange Desk](http://localhost:5173) opens the React app.
+- [Eureka](http://localhost:8761) shows the registered services.
+- [Gateway health](http://localhost:8765/actuator/health) shows whether the API gateway is ready.
 
-```powershell
-docker compose logs -f users-service api-gateway
-docker compose down
-```
+Give Eureka and demo account provisioning a moment after the first start. If the demo login still fails, check `docker compose logs users-service bank-account crypto-wallet`. To stop the stack, run `docker compose down`. The databases are in memory, so restarting a database service resets its data.
 
-### Maven and React, without Docker
+## Demo accounts
 
-On this Windows machine `java` may point to Java 8. Use the installed JDK 17:
-
-```powershell
-$env:JAVA_HOME = 'C:\Program Files\Eclipse Adoptium\jdk-17.0.15.6-hotspot'
-$env:Path = "$env:JAVA_HOME\bin;$env:Path"
-mvn clean test
-mvn clean package
-.\scripts\start-local.ps1
-cd frontend
-npm install
-npm run dev
-```
-
-On Linux/macOS set `JAVA_HOME` to JDK 17, run `mvn clean package`, then `bash scripts/start-local.sh`. Start React with `cd frontend && npm install && npm run dev`. Maven uses the ignored, workspace-local `.tools/m2` cache configured in `.mvn/maven.config`.
-
-The startup scripts launch all nine packaged services and record only their own process IDs in `.runtime/`. Stop them with `scripts/stop-local.ps1` or `bash scripts/stop-local.sh`. Stop Vite with Ctrl+C. Alternatively run each `<module>/target/<module>-1.0.0.jar` with `java -jar`, starting Eureka first. Logs are in `.runtime/`.
-
-## Demo credentials
-
-These are intentionally public academic demo credentials, seeded when `soas.demo-data=true` (the default).
-
-| Email | Password | Role | Initial holdings |
+| Role | Email | Password | Starting balance |
 |---|---|---|---|
-| owner@soas.local | Owner123! | OWNER | None |
-| admin@soas.local | Admin123! | ADMIN | None |
-| user@soas.local | User123! | USER | EUR 10000, ETH 2 |
+| OWNER | `owner@soas.local` | `Owner123!` | — |
+| ADMIN | `admin@soas.local` | `Admin123!` | — |
+| USER | `user@soas.local` | `User123!` | EUR 10,000 and ETH 2 |
 
-The demo USER is provisioned asynchronously after the bank and wallet services become discoverable. **Every newly created USER starts with EUR 0 and ETH 0.** Demo funding is a separate idempotent operation. Passwords in the users database are BCrypt hashes. Set `SOAS_DEMO_DATA=false` / `--soas.demo-data=false` to disable demo seeding; for this academic project retain it for a usable initial OWNER.
+Use the **USER** account to try conversion and trading. New users start with EUR 0 in their bank account and ETH 0 in their wallet. An **ADMIN** can add currencies or change balances. The system allows one **OWNER**, who can delete users and their associated bank accounts and wallets.
 
-## Architecture and modules
-
-Java **17**, Spring Boot **4.0.5**, Spring Cloud **2025.1.1**, Maven, Eureka, Gateway WebFlux, OpenFeign, Spring Data JPA, H2, Spring Security Basic Auth, React 19, Vite 7, TypeScript, Vitest and Docker Compose.
-
-Versions and architectural patterns were checked against the [official SOAS exercises](https://github.com/SOAS-2025-26/Vezbe). This is an independent implementation. See [architecture and compensation design](docs/ARCHITECTURE.md) and [the specification checklist](SPECIFICATION_CHECKLIST.md).
-
-| Module | Port | Responsibility / database |
-|---|---:|---|
-| naming-server | 8761 | Mandatory Eureka server; also registers itself |
-| api-gateway | 8765 | Mandatory single entry point; Basic Auth, CORS, role rules, identity forwarding |
-| users-service | 8770 | Users, BCrypt, lifecycle orchestration; `usersdb` |
-| currency-exchange | 8000 | Public fiat rates via Frankfurter |
-| currency-conversion | 8100 | USER fiat conversion; atomic bank swap via Feign |
-| bank-account | 8200 | Fiat holdings and operation journal; `bankdb` |
-| crypto-wallet | 8300 | Crypto holdings and operation journal; `walletdb` |
-| crypto-exchange | 8400 | Public crypto / EUR / USD rates via Coinbase |
-| trade-service | 8600 | USER trading, three-attempt rate retry, compensation |
-| service-library | — | DTOs, asset catalog, roles and Feign contracts; library only |
-| util | — | Shared validation, authorization helpers, internal authentication and global JSON errors; library only |
-| frontend | 5173 | React interface; nginx in Docker |
-
-Each executable service registers with Eureka. Each database is private to its service. Business inter-service calls use Feign and discovery, with no direct cross-database access. Gateway uses a discovery-aware reactive WebClient solely to validate Basic credentials, as appropriate for its reactive stack. External adapters use modern Spring `RestClient`, never `RestTemplate`.
-
-## Authorization
-
-| Function | OWNER | ADMIN | USER | Anonymous |
+| Action | OWNER | ADMIN | USER | Guest |
 |---|---|---|---|---|
-| Fiat / crypto rates | Yes | Yes | Yes | Yes |
-| Users | CRUD | View; create/update USER only | No | No |
-| Bank / wallet | No | View all; add/update holdings | View own only | No |
-| Conversion / trade | No | No | Yes | No |
+| Look up rates | Yes | Yes | Yes | Yes |
+| Manage users | Create, view, update and delete | View users, create and update USER accounts | — | — |
+| View or manage balances | — | View all, add and update holdings | View own only | — |
+| Convert fiat or trade crypto | — | — | Yes | — |
 
-Basic Auth is enforced at Gateway for every protected endpoint. `/auth/me` validates login and returns only `{id,email,role}`. Gateway strips caller-supplied identity and internal headers, then injects verified email/role and a Gateway key. Services reject untrusted direct protected requests. `/internal/**` requires a separate shared service key and has no Gateway route. Internal mutation operations cannot be invoked as arbitrary USER balance edits. CORS permits `http://localhost:5173` by default.
+## Services
 
-Basic credentials are held in browser session storage, cleared on logout, and never stored in local storage. Changing your own user record signs you out so credentials and role are revalidated.
+The backend uses Java 17, Maven, Spring Boot 4, Spring Cloud, OpenFeign and H2. The frontend uses React, TypeScript and Vite. Eureka handles service discovery, and the browser sends its API requests through the gateway. The users, bank and wallet services each have their own H2 database.
 
-## Complete Gateway URL inventory
+| Module | Port | What it does |
+|---|---:|---|
+| `naming-server` | 8761 | Eureka service registry |
+| `api-gateway` | 8765 | Routes requests, checks Basic Auth and forwards the verified identity |
+| `users-service` | 8770 | Manages users and roles, hashes passwords with BCrypt, and coordinates account and wallet provisioning |
+| `currency-exchange` | 8000 | Gets fiat rates and supported currencies from Frankfurter |
+| `currency-conversion` | 8100 | Converts fiat and updates the bank account |
+| `bank-account` | 8200 | Stores fiat balances and their operation history |
+| `crypto-wallet` | 8300 | Stores crypto balances and their operation history |
+| `crypto-exchange` | 8400 | Gets crypto rates from Coinbase |
+| `trade-service` | 8600 | Coordinates crypto swaps, buys and sells |
+| `frontend` | 5173 | React app |
 
-All user-facing backend URLs use **http://localhost:8765**. Replace `{id}` and `{email}` with actual values; URL-encode path values. All methods below except public rates and health require the `Authorization: Basic …` header.
+`service-library` contains shared DTOs and Feign clients. `util` contains validation, internal authentication and JSON error handling. Bank and wallet operations use local transactions. For trades that span both services, the trade service tracks completed steps and attempts to reverse them if a later step fails. Rate lookups can retry up to three times. Balance updates are sent once.
+
+Fiat options come from Frankfurter’s currency catalog. The crypto options are BTC, ETH, SOL, ADA, XRP, LTC, DOGE and BCH. Trades involving fiat other than EUR or USD use USD as an intermediate currency. Quotes depend on provider availability. [Frankfurter](https://frankfurter.dev/) · [Coinbase exchange rates](https://docs.cdp.coinbase.com/coinbase-app/track-apis/exchange-rates)
+
+## API endpoints
+
+Use the gateway on port **8765**. Protected requests use HTTP Basic Auth with the demo email and password. Replace `{id}` or `{email}` with the real value and URL-encode it when needed.
 
 | Method | Functional URL | Access / purpose |
 |---|---|---|
-| GET | `http://localhost:8765/auth/me` | Any authenticated role; current identity |
-| GET | `http://localhost:8765/users` | OWNER / ADMIN; user directory |
-| GET | `http://localhost:8765/users/{id}` | OWNER / ADMIN; user details |
-| POST | `http://localhost:8765/users` | OWNER; ADMIN restricted to USER |
-| PUT | `http://localhost:8765/users/{id}` | OWNER; ADMIN only USER → USER |
-| DELETE | `http://localhost:8765/users/{id}` | OWNER; dependent cleanup before deletion |
-| GET | `http://localhost:8765/bank-accounts` | ADMIN; all accounts |
-| GET | `http://localhost:8765/bank-accounts/me` | USER; own fiat account |
+| GET | `http://localhost:8765/auth/me` | Any authenticated role, current identity |
+| GET | `http://localhost:8765/users` | OWNER / ADMIN, user directory |
+| GET | `http://localhost:8765/users/{id}` | OWNER / ADMIN, user details |
+| POST | `http://localhost:8765/users` | OWNER, or ADMIN creating a USER |
+| PUT | `http://localhost:8765/users/{id}` | OWNER, or ADMIN updating a USER without changing the role |
+| DELETE | `http://localhost:8765/users/{id}` | OWNER, with account and wallet cleanup |
+| GET | `http://localhost:8765/bank-accounts` | ADMIN, all accounts |
+| GET | `http://localhost:8765/bank-accounts/me` | USER, own fiat account |
 | GET | `http://localhost:8765/bank-accounts/{email}` | ADMIN or matching USER |
-| POST | `http://localhost:8765/bank-accounts/holdings` | ADMIN; add a new holding |
-| PUT | `http://localhost:8765/bank-accounts/holdings` | ADMIN; set an existing total balance |
-| GET | `http://localhost:8765/crypto-wallets` | ADMIN; all wallets |
-| GET | `http://localhost:8765/crypto-wallets/me` | USER; own wallet |
+| POST | `http://localhost:8765/bank-accounts/holdings` | ADMIN, add a new holding |
+| PUT | `http://localhost:8765/bank-accounts/holdings` | ADMIN, set an existing total balance |
+| GET | `http://localhost:8765/crypto-wallets` | ADMIN, all wallets |
+| GET | `http://localhost:8765/crypto-wallets/me` | USER, own wallet |
 | GET | `http://localhost:8765/crypto-wallets/{email}` | ADMIN or matching USER |
-| POST | `http://localhost:8765/crypto-wallets/holdings` | ADMIN; add a new holding |
-| PUT | `http://localhost:8765/crypto-wallets/holdings` | ADMIN; set an existing total balance |
+| POST | `http://localhost:8765/crypto-wallets/holdings` | ADMIN, add a new holding |
+| PUT | `http://localhost:8765/crypto-wallets/holdings` | ADMIN, set an existing total balance |
 | GET | `http://localhost:8765/currency-exchange?from=EUR&to=RSD` | Public fiat rate |
 | GET | `http://localhost:8765/currency-exchange/assets` | Public supported fiat codes |
-| GET | `http://localhost:8765/crypto-exchange?from=BTC&to=ETH` | Public crypto rate; EUR and USD also accepted |
+| GET | `http://localhost:8765/crypto-exchange?from=BTC&to=ETH` | Public crypto rate. EUR and USD also accepted |
 | GET | `http://localhost:8765/crypto-exchange/assets` | Public supported crypto codes |
-| GET | `http://localhost:8765/currency-conversion?from=EUR&to=RSD&quantity=100` | USER; mutates fiat holdings |
-| GET | `http://localhost:8765/trade-service?from=EUR&to=BTC&quantity=100` | USER; buys BTC with EUR |
-| GET | `http://localhost:8765/trade-service?from=ETH&to=BTC&quantity=0.01` | USER; crypto → crypto |
-| GET | `http://localhost:8765/trade-service?from=RSD&to=BTC&quantity=100` | USER; RSD → USD conversion → BTC |
-| GET | `http://localhost:8765/trade-service?from=ETH&to=EUR&quantity=0.01` | USER; crypto → fiat |
-| GET | `http://localhost:8765/trade-service?from=ETH&to=RSD&quantity=0.01` | USER; ETH → USD → RSD conversion |
+| GET | `http://localhost:8765/currency-conversion?from=EUR&to=RSD&quantity=100` | USER, mutates fiat holdings |
+| GET | `http://localhost:8765/trade-service?from=EUR&to=BTC&quantity=100` | USER, buys BTC with EUR |
+| GET | `http://localhost:8765/trade-service?from=ETH&to=BTC&quantity=0.01` | USER, crypto → crypto |
+| GET | `http://localhost:8765/trade-service?from=RSD&to=BTC&quantity=100` | USER, RSD → USD conversion → BTC |
+| GET | `http://localhost:8765/trade-service?from=ETH&to=EUR&quantity=0.01` | USER, crypto → fiat |
+| GET | `http://localhost:8765/trade-service?from=ETH&to=RSD&quantity=0.01` | USER, ETH → USD → RSD conversion |
 | GET | `http://localhost:8765/actuator/health` | Public Gateway health |
 
-The last two business endpoints intentionally use GET because the assignment requires that exact request shape. **They change balances; submit once.** Gateway sends `Cache-Control: no-store`. The frontend never retries a mutation automatically.
+The assignment specifies GET for currency conversion and trading. Both endpoints **change balances**, so send each request once. Successful responses include the resulting bank account or wallet and an operation ID.
 
-Create a user (JSON, OWNER or ADMIN):
+**Create a user**
 
 ```json
 {"email":"new@soas.local","password":"Password123!","role":"USER"}
 ```
 
-Update a user (OWNER, or ADMIN updating a USER); `password:null` retains the current password:
+For a user update, send the email and role with `"password": null` to keep the current password.
 
-```json
-{"email":"renamed@soas.local","password":null,"role":"USER"}
-```
-
-Add / update a holding (ADMIN; use POST only when the currency is absent):
+**Add or update a holding**
 
 ```json
 {"email":"user@soas.local","currency":"USD","amount":"1000.00"}
 ```
 
-Conversion/trade returns `{from,to,quantity,received,bankAccount,wallet,report,operationId}`. Crypto-target trades return the resulting wallet; fiat-target trades and conversions return the resulting bank account. The transaction report states both amounts and currencies. Amounts use `BigDecimal` with up to 12 fractional digits and half-even rounding. Codes are normalized to uppercase; emails to lowercase.
+Use POST for a new currency and PUT to set the total balance of an existing holding.
 
-Errors use `{timestamp,status,error,message,path}` with appropriate 400/401/403/404/409/503 statuses and no client stack traces. Unexpected failures produce a generic 500 response and are logged server-side.
+## Run from source
 
-## External providers
-
-* Fiat: [Frankfurter v2](https://frankfurter.dev/), `GET https://api.frankfurter.dev/v2/rate/EUR/RSD`, configurable with `FIAT_API_URL`.
-* Crypto: [Coinbase public exchange rates](https://docs.cdp.coinbase.com/coinbase-app/track-apis/exchange-rates), `GET https://api.coinbase.com/v2/exchange-rates?currency=BTC`, configurable with `CRYPTO_API_URL`. No API key is required.
-
-Both exact endpoints were verified during implementation. Provider adapters are isolated and tested against local HTTP stubs. Automated tests never call live providers. Rates are indicative quotes; this is an academic simulator with no real money or crypto custody.
-
-Supported fiat: EUR, USD, RSD, GBP, CHF, JPY, CAD, AUD, CNY, HUF, BAM, NOK, SEK, PLN. Supported crypto: BTC, ETH, SOL, ADA, XRP, LTC, DOGE, BCH. Unsupported pairs and upstream outages return clear errors. Equal-asset lookup returns 1 without a network call.
-
-## Tests and verification
+Use JDK 17, Maven and Node.js 22.12 or newer. If Compose is running, stop it with `docker compose down` to free the ports. Start the backend from the repository root:
 
 ```powershell
-mvn clean test
 mvn clean package
+.\scripts\start-local.ps1
+```
+
+Start the frontend in a second terminal:
+
+```powershell
 cd frontend
-npm install
+npm ci
+npm run dev
+```
+
+On Linux or macOS, start the backend with `bash scripts/start-local.sh`. Stop it with `.\scripts\stop-local.ps1` on Windows or `bash scripts/stop-local.sh` on Linux and macOS. Stop the frontend with Ctrl+C. For startup issues, check `mvn -version` for Java 17 and look in `.runtime/` for service logs.
+
+## Tests
+
+```powershell
+mvn test
+cd frontend
+npm ci
 npm test
 npm run build
-cd ..
-.\scripts\smoke-test.ps1
-# Linux/macOS: bash scripts/smoke-test.sh
 ```
 
-The smoke script requires the full running system, Node 22, demo credentials and live provider connectivity. It creates a disposable test USER, funds it through ADMIN endpoints, exercises conversion and every trade mode, checks authorization and lifecycle updates, then deletes it. Results go to ignored `.runtime/smoke-results.json`.
+With the full app running and the demo accounts enabled, run `.\scripts\smoke-test.ps1` from the root, or `bash scripts/smoke-test.sh` on Linux or macOS. The smoke test creates a temporary user, exercises the main flows and deletes the user when finished. It uses live rates.
 
-The final suite contains **94 backend tests** and **11 frontend tests**. A clean `npm ci` from the included lockfile and `npm audit` also pass, with zero reported vulnerabilities at verification time.
+The verified run passed 117 backend tests, 18 frontend tests and 14 smoke test groups.
 
-Tests include real H2 persistence, role and lifecycle rules, duplicate OWNER/email, atomic swaps and idempotent undo, mocked provider behavior, all trade paths, compensation and retry, Gateway HTTP routing/header stripping/authentication/CORS, frontend route protection, logout and API error handling. See [actual verification results](docs/VERIFICATION.md) for environment-specific outcomes; source presence alone is not runtime verification.
+## Docker Hub
 
-## Docker Hub submission
+All nine backend images are public under `davidsubotinds` with the `latest` tag.
 
-Set `DOCKERHUB_USERNAME` in `.env` to **your own** account. Each backend image is tagged `latest`:
+| Service | Published image |
+|---|---|
+| naming-server | [davidsubotinds/soas-naming-server:latest](https://hub.docker.com/r/davidsubotinds/soas-naming-server/tags) |
+| users-service | [davidsubotinds/soas-users-service:latest](https://hub.docker.com/r/davidsubotinds/soas-users-service/tags) |
+| currency-exchange | [davidsubotinds/soas-currency-exchange:latest](https://hub.docker.com/r/davidsubotinds/soas-currency-exchange/tags) |
+| currency-conversion | [davidsubotinds/soas-currency-conversion:latest](https://hub.docker.com/r/davidsubotinds/soas-currency-conversion/tags) |
+| bank-account | [davidsubotinds/soas-bank-account:latest](https://hub.docker.com/r/davidsubotinds/soas-bank-account/tags) |
+| crypto-wallet | [davidsubotinds/soas-crypto-wallet:latest](https://hub.docker.com/r/davidsubotinds/soas-crypto-wallet/tags) |
+| crypto-exchange | [davidsubotinds/soas-crypto-exchange:latest](https://hub.docker.com/r/davidsubotinds/soas-crypto-exchange/tags) |
+| trade-service | [davidsubotinds/soas-trade-service:latest](https://hub.docker.com/r/davidsubotinds/soas-trade-service/tags) |
+| api-gateway | [davidsubotinds/soas-api-gateway:latest](https://hub.docker.com/r/davidsubotinds/soas-api-gateway/tags) |
 
-```text
-<username>/soas-naming-server:latest
-<username>/soas-api-gateway:latest
-<username>/soas-users-service:latest
-<username>/soas-currency-exchange:latest
-<username>/soas-currency-conversion:latest
-<username>/soas-bank-account:latest
-<username>/soas-crypto-wallet:latest
-<username>/soas-crypto-exchange:latest
-<username>/soas-trade-service:latest
-```
+To build and publish the backend images under your own Docker Hub account, run `.\scripts\publish-docker.ps1 -Username 'your-docker-id'`. If an upload is interrupted after the build, rerun with `-Resume` to use the existing images and saved Docker login.
 
-The optional frontend image is `<username>/soas-frontend:latest`. Compose builds all images locally as well as assigning the submission tags. Dockerfiles are multi-stage, use Java 17 and run backend applications as a non-root user.
+---
 
-```powershell
-docker login
-docker compose build
-docker compose push
-```
-
-Login/push require your credentials and have not been performed by this implementation. Configure the assigned university GitHub remote separately; do not push to a guessed remote.
-
-## Explicit specification interpretations
-
-1. The Crypto Wallet paragraph's “bank account with 0 ETH” means **wallet ETH = 0**.
-2. One logical bank account/wallet per email has multiple currency rows with a database `unique(email,currency)` constraint.
-3. Deletion is an authenticated **internal lifecycle operation**; ADMIN receives no public bank/wallet delete endpoint.
-4. Fiat/crypto rate lookup is public to satisfy the UI requirement. Every other user-facing business function requires Gateway Basic Auth.
-5. Non-EUR/USD trades settle through **USD**. Conversion is a real Feign call that mutates the intermediate holding; the trade then consumes it exactly once.
-6. The OWNER uniqueness rule means at most one OWNER, including role updates. OWNER may update/delete any user, including themself, as explicitly required. Do not remove your only OWNER during the defense unless demonstrating recovery by restarting the in-memory system.
-7. Fiat precision is also 12 decimal places to keep trade bridge calculations exact within the chosen precision. Presentation formats fiat to four and crypto to twelve decimal places; calculations happen on the backend.
-
-## Troubleshooting
-
-* **Java 8 starts instead of 17:** set `JAVA_HOME` and prepend its `bin` as shown above. `mvn -version` must report Java 17.
-* **Docker cannot connect:** start Docker Desktop and wait for the Linux engine. `docker version` must include a Server section. Compose configuration validation does not prove containers ran.
-* **Initial 503 or demo USER unavailable:** wait for Eureka registration and the scheduled demo provisioner (15-second initial delay, 10-second retries). Check service health, `.runtime/*.log` or Compose logs.
-* **Public rate failure:** check internet access/provider limits. There are no fabricated fallback rates. Trading retries only rate reads, up to three attempts; balances are untouched if quotes cannot be obtained.
-* **403:** check the role matrix. OWNER/ADMIN intentionally cannot convert or trade; OWNER cannot manage balances.
-* **CORS:** use `http://localhost:5173`, or set `FRONTEND_ORIGIN` consistently. Build `VITE_API_URL` into the frontend when changing the Gateway address.
-* **Lifecycle compensation error:** a user remains locked when automatic restoration fails. Restore downstream availability, inspect logs and operation IDs; use the protected internal contracts described in the architecture document to reconcile state. H2 restarts reset the entire demo data set.
-* **Balance conflict:** concurrent updates fail rather than silently overwrite a balance; refresh before another transaction.
-* **Memory:** allow roughly 3–4 GB for all JVMs, Eureka, Docker and the UI. Local scripts cap each JVM heap at 256 MB.
-
-## Course submission reminders
-
-Ultimately submit the complete code to the repository assigned under [SOAS-2025-26](https://github.com/SOAS-2025-26). Per the supplied specification, register the project defense at least **7 days before the exam date**; contact **vfficial98@gmail.com** for registration/questions. Minimum score to defend/pass: **51/100**. These administrative facts are recorded from the supplied guide; confirm current arrangements with the course staff.
-
+David Subotin · SOAS 2025/26

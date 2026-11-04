@@ -1,4 +1,4 @@
-package rs.ac.soas.util;
+package rs.ac.soas.contract;
 
 import java.time.Instant;
 

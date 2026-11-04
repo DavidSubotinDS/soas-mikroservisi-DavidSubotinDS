@@ -16,6 +16,8 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Mono;
+import rs.ac.soas.contract.Api;
+import rs.ac.soas.contract.Role;
 
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
@@ -87,7 +89,7 @@ class GatewayTest {
               if (!input.getCredentials().equals("valid"))
                 return Mono.error(new BadCredentialsException("Invalid credentials"));
               String role = input.getName().split("@")[0].toUpperCase();
-              var identity = new GatewayIdentity(1, input.getName(), role);
+              var identity = new Api.Identity(1, input.getName(), Role.valueOf(role));
               return Mono.just(
                   new UsernamePasswordAuthenticationToken(
                       identity, null, List.of(new SimpleGrantedAuthority("ROLE_" + role))));

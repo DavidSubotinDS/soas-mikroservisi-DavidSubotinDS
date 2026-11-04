@@ -17,6 +17,7 @@ import org.springframework.web.cors.reactive.CorsConfigurationSource;
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
+import rs.ac.soas.contract.Api;
 
 @Configuration
 public class GatewaySecurity {
@@ -35,17 +36,13 @@ public class GatewaySecurity {
             .post()
             .uri("http://users-service/internal/auth/validate")
             .header("X-Internal-Key", key)
-            .bodyValue(
-                Map.of(
-                    "email",
-                    authentication.getName(),
-                    "password",
-                    authentication.getCredentials().toString()))
+            .bodyValue(new Api.Credentials(authentication.getName(),
+                authentication.getCredentials().toString()))
             .retrieve()
             .onStatus(
                 status -> status.value() == 401,
                 response -> Mono.error(new BadCredentialsException("Invalid email or password")))
-            .bodyToMono(GatewayIdentity.class)
+            .bodyToMono(Api.Identity.class)
             .timeout(Duration.ofSeconds(8))
             .map(
                 user ->

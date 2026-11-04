@@ -1,8 +1,14 @@
 import { useState } from "react";
 import { ArrowDownUp, ArrowUpRight, Globe2, ShieldCheck } from "lucide-react";
 import { request } from "../api";
-import { CurrencySelect, Notice, PageHeading } from "../components";
-import { CRYPTO, FIAT, formatAmount, type Rate } from "../types";
+import {
+  CurrencySelect,
+  CurrencyCatalogStatus,
+  Notice,
+  PageHeading,
+} from "../components";
+import { CRYPTO, formatAmount, type Rate } from "../types";
+import { useFiatCurrencies } from "../currencies";
 
 export function Rates({ crypto = false }: { crypto?: boolean }) {
   const [from, setFrom] = useState(crypto ? "BTC" : "EUR");
@@ -10,7 +16,8 @@ export function Rates({ crypto = false }: { crypto?: boolean }) {
   const [rate, setRate] = useState<Rate | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const assets = crypto ? [...CRYPTO, "USD", "EUR"] : FIAT;
+  const catalog = useFiatCurrencies(!crypto);
+  const assets = crypto ? [...CRYPTO, "USD", "EUR"] : catalog.currencies;
   async function lookup(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true);
@@ -43,6 +50,7 @@ export function Rates({ crypto = false }: { crypto?: boolean }) {
             <h2>{crypto ? "Crypto" : "Fiat"} rate lookup</h2>
             <span className="badge">Public access</span>
           </div>
+          <CurrencyCatalogStatus {...catalog} />
           <form onSubmit={lookup}>
             <div className="pair-fields">
               <CurrencySelect
@@ -76,7 +84,7 @@ export function Rates({ crypto = false }: { crypto?: boolean }) {
                 options={assets}
               />
             </div>
-            <button className="primary" disabled={busy}>
+            <button className="primary" disabled={busy || !catalog.ready}>
               {busy ? "Looking up rate…" : "Get exchange rate"}
               <ArrowUpRight size={18} />
             </button>

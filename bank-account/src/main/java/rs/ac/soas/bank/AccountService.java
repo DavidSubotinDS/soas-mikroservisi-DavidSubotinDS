@@ -13,15 +13,21 @@ public class AccountService {
   private final HoldingRepository holdings;
   private final LedgerRepository ledger;
   private final UsersClient users;
+  private final FiatCurrencies currencies;
 
-  public AccountService(HoldingRepository holdings, LedgerRepository ledger, UsersClient users) {
+  public AccountService(
+      HoldingRepository holdings,
+      LedgerRepository ledger,
+      UsersClient users,
+      FiatCurrencies currencies) {
     this.holdings = holdings;
     this.ledger = ledger;
     this.users = users;
+    this.currencies = currencies;
   }
 
   private String currency(String raw) {
-    return Checks.fiat(raw);
+    return currencies.require(raw);
   }
 
   private void requireUser(String email) {

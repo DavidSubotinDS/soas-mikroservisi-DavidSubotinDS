@@ -7,8 +7,10 @@ import rs.ac.soas.contract.*;
 public final class Checks {
   private Checks() {}
 
-  public static String fiat(String raw) {
-    return asset(raw, Assets.FIAT, "fiat currency");
+  public static String fiatCode(String raw) {
+    String code = Assets.code(raw);
+    if (!code.matches("[A-Z]{3}")) throw BusinessException.bad("Invalid fiat currency code");
+    return code;
   }
 
   public static String crypto(String raw) {

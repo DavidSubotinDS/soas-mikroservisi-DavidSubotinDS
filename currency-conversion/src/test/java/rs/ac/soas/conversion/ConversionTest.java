@@ -13,10 +13,11 @@ import rs.ac.soas.util.*;
 class ConversionTest {
   BankClient bank = mock(BankClient.class);
   FiatClient rates = mock(FiatClient.class);
-  ConversionService service = new ConversionService(bank, rates);
+  ConversionService service = new ConversionService(bank, rates, new FiatCurrencies(rates));
 
   @BeforeEach
   void setup() {
+    when(rates.currencies()).thenReturn(List.of("EUR", "RSD", "USD", "NZD"));
     when(bank.account("user@test.local"))
         .thenReturn(
             new Api.Account(
@@ -39,6 +40,18 @@ class ConversionTest {
     return service.convert(
         new Api.ConversionRequest(
             "user@test.local", "EUR", "RSD", new BigDecimal(quantity), null, null));
+  }
+
+  @Test
+  void convertsIntoProviderFiatOutsideOriginalAllowlist() {
+    when(rates.rate("EUR", "NZD"))
+        .thenReturn(new Api.Rate("EUR", "NZD", new BigDecimal("2"), "mock"));
+    var result =
+        service.convert(
+            new Api.ConversionRequest(
+                "user@test.local", "EUR", "NZD", new BigDecimal("10"), null, null));
+    assertThat(result.received()).isEqualByComparingTo("20");
+    verify(bank).swap(argThat(s -> s.to().equals("NZD")));
   }
 
   @Test

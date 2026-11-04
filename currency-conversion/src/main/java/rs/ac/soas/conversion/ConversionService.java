@@ -10,16 +10,18 @@ import rs.ac.soas.util.*;
 public class ConversionService {
   private final BankClient bank;
   private final FiatClient rates;
+  private final FiatCurrencies currencies;
 
-  public ConversionService(BankClient bank, FiatClient rates) {
+  public ConversionService(BankClient bank, FiatClient rates, FiatCurrencies currencies) {
     this.bank = bank;
     this.rates = rates;
+    this.currencies = currencies;
   }
 
   public Api.Transaction convert(Api.ConversionRequest input) {
     String email = Assets.email(input.email()),
-        from = Checks.fiat(input.from()),
-        to = Checks.fiat(input.to());
+        from = currencies.require(input.from()),
+        to = currencies.require(input.to());
     BigDecimal quantity = Checks.positive(input.quantity());
     Api.Account current = bank.account(email);
     funds(current, from, quantity);

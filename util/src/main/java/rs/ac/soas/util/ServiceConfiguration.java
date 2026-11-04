@@ -9,7 +9,7 @@ import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.servlet.config.annotation.*;
 
 @Configuration
-@Import(GlobalErrors.class)
+@Import({GlobalErrors.class, FiatCurrencies.class})
 public class ServiceConfiguration implements WebMvcConfigurer {
   private final String internalKey, gatewayKey;
 

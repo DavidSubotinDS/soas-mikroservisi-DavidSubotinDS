@@ -6,14 +6,17 @@ import {
   AccountView,
   Busy,
   CurrencySelect,
+  CurrencyCatalogStatus,
   Notice,
   PageHeading,
 } from "../components";
-import { CRYPTO, FIAT, validAmount, type Account } from "../types";
+import { CRYPTO, validAmount, type Account } from "../types";
+import { useFiatCurrencies } from "../currencies";
 
 export function Accounts({ crypto = false }: { crypto?: boolean }) {
   const { user, credential } = useAuth();
   const admin = user?.role === "ADMIN";
+  const catalog = useFiatCurrencies(!crypto && admin);
   const path = crypto ? "/crypto-wallets" : "/bank-accounts";
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
@@ -111,6 +114,7 @@ export function Accounts({ crypto = false }: { crypto?: boolean }) {
               <h2>Manage a holding</h2>
               <Plus size={18} />
             </div>
+            <CurrencyCatalogStatus {...catalog} />
             <form onSubmit={save}>
               <label>
                 Operation
@@ -141,7 +145,7 @@ export function Accounts({ crypto = false }: { crypto?: boolean }) {
                 label="Currency"
                 value={currency}
                 onChange={setCurrency}
-                options={crypto ? CRYPTO : FIAT}
+                options={crypto ? CRYPTO : catalog.currencies}
               />
               <label>
                 New total balance
@@ -157,7 +161,7 @@ export function Accounts({ crypto = false }: { crypto?: boolean }) {
                 Set the total balance held in this currency. Newly created USER
                 accounts start with EUR 0 and ETH 0.
               </p>
-              <button className="primary" disabled={busy}>
+              <button className="primary" disabled={busy || !catalog.ready}>
                 {busy ? "Saving…" : "Save holding"}
               </button>
             </form>

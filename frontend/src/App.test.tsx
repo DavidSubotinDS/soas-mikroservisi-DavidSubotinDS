@@ -1,11 +1,23 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { afterEach, expect, it, vi } from "vitest";
+import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { AuthProvider } from "./auth";
 import App from "./App";
 
 afterEach(() => vi.unstubAllGlobals());
+beforeEach(() =>
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockImplementation(() =>
+        Promise.resolve(
+          new Response(JSON.stringify(["EUR", "USD", "RSD", "NZD"])),
+        ),
+      ),
+  ),
+);
 function mount(path = "/") {
   render(
     <MemoryRouter initialEntries={[path]}>
@@ -45,7 +57,7 @@ it.each(["OWNER", "ADMIN", "USER"])(
               JSON.stringify(
                 url.endsWith("/auth/me")
                   ? { id: 1, email: "test@soas.local", role }
-                  : [],
+                  : ["EUR", "USD", "RSD", "NZD"],
               ),
             ),
           ),
@@ -79,9 +91,15 @@ it("blocks an OWNER from the trading page", async () => {
     "fetch",
     vi
       .fn()
-      .mockResolvedValue(
-        new Response(
-          JSON.stringify({ id: 1, email: "owner@soas.local", role: "OWNER" }),
+      .mockImplementation((url: string) =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify(
+              url.endsWith("/auth/me")
+                ? { id: 1, email: "owner@soas.local", role: "OWNER" }
+                : ["EUR", "USD", "RSD", "NZD"],
+            ),
+          ),
         ),
       ),
   );

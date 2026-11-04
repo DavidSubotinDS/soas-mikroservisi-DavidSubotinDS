@@ -62,6 +62,7 @@ class AccountServiceTest {
   @Autowired HoldingRepository holdings;
   @Autowired LedgerRepository ledger;
   @MockitoBean UsersClient users;
+  @MockitoBean FiatClient fiat;
   static final String EMAIL = "user@test.local";
 
   @BeforeEach
@@ -69,6 +70,7 @@ class AccountServiceTest {
     holdings.deleteAll();
     ledger.deleteAll();
     when(users.lookup(anyString())).thenReturn(new Api.Identity(1, EMAIL, Role.USER));
+    when(fiat.currencies()).thenReturn(java.util.List.of("EUR", "USD", "RSD", "NZD"));
   }
 
   BigDecimal n(String value) {
@@ -96,6 +98,19 @@ class AccountServiceTest {
     assertThat(holdings.count()).isEqualTo(1);
     assertThatThrownBy(() -> accounts.set(input("EUR", "2"), true))
         .hasMessageContaining("already exists");
+  }
+
+  @Test
+  void providerListedFiatHoldingCanBeCreatedButUnknownCodesAreRejected() {
+    accounts.provision(EMAIL);
+    assertThat(accounts.set(input("NZD", "100"), true).holdings())
+        .anySatisfy(
+            h -> {
+              assertThat(h.currency()).isEqualTo("NZD");
+              assertThat(h.amount()).isEqualByComparingTo("100");
+            });
+    assertThatThrownBy(() -> accounts.set(input("ZZZ", "100"), true))
+        .hasMessageContaining("Unsupported fiat currency");
   }
 
   @Test

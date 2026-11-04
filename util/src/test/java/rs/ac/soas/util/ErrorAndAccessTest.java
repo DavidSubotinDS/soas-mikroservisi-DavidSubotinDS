@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.*;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
+import rs.ac.soas.contract.ApiError;
 
 class ErrorAndAccessTest {
   @Test
@@ -22,7 +23,7 @@ class ErrorAndAccessTest {
 
   @Test
   void amountsAndAssetsAreValidated() {
-    assertThat(Checks.fiat(" eur ")).isEqualTo("EUR");
+    assertThat(Checks.fiatCode(" eur ")).isEqualTo("EUR");
     assertThatThrownBy(() -> Checks.crypto("EUR")).hasMessageContaining("Unsupported");
     assertThatThrownBy(() -> Checks.positive(new BigDecimal("0.0000000000001")))
         .isInstanceOf(BusinessException.class);

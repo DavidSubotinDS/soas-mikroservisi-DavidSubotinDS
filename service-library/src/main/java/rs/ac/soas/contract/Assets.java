@@ -4,10 +4,6 @@ import java.math.*;
 import java.util.*;
 
 public final class Assets {
-  public static final Set<String> FIAT =
-      Set.of(
-          "EUR", "USD", "RSD", "GBP", "CHF", "JPY", "CAD", "AUD", "CNY", "HUF", "BAM", "NOK", "SEK",
-          "PLN");
   public static final Set<String> CRYPTO =
       Set.of("BTC", "ETH", "SOL", "ADA", "XRP", "LTC", "DOGE", "BCH");
 

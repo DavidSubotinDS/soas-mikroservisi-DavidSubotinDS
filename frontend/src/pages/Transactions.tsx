@@ -4,15 +4,18 @@ import { useAuth } from "../auth";
 import { request } from "../api";
 import {
   CurrencySelect,
+  CurrencyCatalogStatus,
   Notice,
   PageHeading,
   TransactionView,
 } from "../components";
-import { CRYPTO, FIAT, validAmount, type Transaction } from "../types";
+import { CRYPTO, validAmount, type Transaction } from "../types";
+import { useFiatCurrencies } from "../currencies";
 
 export function Transactions({ trade = false }: { trade?: boolean }) {
   const { credential } = useAuth();
   const [mode, setMode] = useState("buy");
+  const catalog = useFiatCurrencies(!trade || mode !== "swap");
   const [from, setFrom] = useState("EUR");
   const [to, setTo] = useState(trade ? "BTC" : "RSD");
   const [quantity, setQuantity] = useState("");
@@ -85,19 +88,22 @@ export function Transactions({ trade = false }: { trade?: boolean }) {
               ))}
             </div>
           )}
+          <CurrencyCatalogStatus {...catalog} />
           <form onSubmit={submit}>
             <div className="pair-fields no-swap">
               <CurrencySelect
                 label="From"
                 value={from}
                 onChange={setFrom}
-                options={!trade || mode === "buy" ? FIAT : CRYPTO}
+                options={!trade || mode === "buy" ? catalog.currencies : CRYPTO}
               />
               <CurrencySelect
                 label="To"
                 value={to}
                 onChange={setTo}
-                options={!trade || mode === "sell" ? FIAT : CRYPTO}
+                options={
+                  !trade || mode === "sell" ? catalog.currencies : CRYPTO
+                }
               />
             </div>
             <label>
@@ -117,7 +123,7 @@ export function Transactions({ trade = false }: { trade?: boolean }) {
               Submit once and wait for the result.
             </p>
             <Notice message={error} />
-            <button className="primary" disabled={busy}>
+            <button className="primary" disabled={busy || !catalog.ready}>
               {busy
                 ? "Processing exchange…"
                 : trade
